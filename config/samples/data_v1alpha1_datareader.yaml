@@ -1,0 +1,9 @@
+apiVersion: data.tomer.com/v1alpha1
+kind: Datareader
+metadata:
+  labels:
+    app.kubernetes.io/name: test-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: datareader-sample
+spec:
+  # TODO(user): Add fields here
