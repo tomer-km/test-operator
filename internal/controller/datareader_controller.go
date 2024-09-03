@@ -18,6 +18,14 @@ package controller
 
 import (
 	"context"
+	"fmt"
+
+	appsv1 "k8s.io/api/apps/v1"
+	apiv1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -32,6 +40,50 @@ type DatareaderReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
+
+func GetDeploymentSpec(name string, volumespecs []apiv1.Volume, volumemounts []apiv1.VolumeMount) *appsv1.Deployment {
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: int32Ptr(2),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": name,
+				},
+			},
+			Template: apiv1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": name,
+					},
+				},
+				Spec: apiv1.PodSpec{
+					Containers: []apiv1.Container{
+						{
+							Name:  "web",
+							Image: "nginx:1.12",
+							Ports: []apiv1.ContainerPort{
+								{
+									Name:          "http",
+									Protocol:      apiv1.ProtocolTCP,
+									ContainerPort: 80,
+								},
+							},
+							VolumeMounts: volumemounts,
+						},
+					},
+					Volumes: volumespecs,
+				},
+			},
+		},
+	}
+	return deployment
+
+}
+
+func int32Ptr(i int32) *int32 { return &i }
 
 //+kubebuilder:rbac:groups=data.tomer.com,resources=datareaders,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=data.tomer.com,resources=datareaders/status,verbs=get;update;patch
@@ -48,6 +100,51 @@ type DatareaderReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.3/pkg/reconcile
 func (r *DatareaderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
+	//logger := log.WithValues("service", req.NamespacedName)
+	reader := &datav1alpha1.Datareader{}
+	err := r.Get(ctx, req.NamespacedName, reader)
+	if err != nil {
+		return ctrl.Result{}, nil
+	}
+
+	configmaps := &corev1.ConfigMapList{}
+	deployment := &appsv1.Deployment{}
+
+	selector := labels.SelectorFromSet(map[string]string{"test": "true"})
+
+	err = r.List(ctx, configmaps, &client.ListOptions{LabelSelector: selector, Namespace: req.NamespacedName.Namespace})
+	if err != nil {
+		panic(err.Error())
+	}
+
+	var volumespecs []apiv1.Volume
+	var volumemounts []apiv1.VolumeMount
+
+	for _, configmap := range configmaps.Items {
+		volumespecs = append(volumespecs, apiv1.Volume{Name: configmap.Name, VolumeSource: apiv1.VolumeSource{ConfigMap: &apiv1.ConfigMapVolumeSource{LocalObjectReference: apiv1.LocalObjectReference{Name: configmap.Name}}}})
+		volumemounts = append(volumemounts, apiv1.VolumeMount{Name: configmap.Name, MountPath: "/tmp/cm/" + configmap.Name})
+	}
+
+	deploymentSpec := GetDeploymentSpec("demo-deployment", volumespecs, volumemounts)
+
+	err = r.Get(ctx, req.NamespacedName, deployment, &client.GetOptions{})
+	if err != nil {
+
+		err = r.Create(ctx, deploymentSpec, &client.CreateOptions{})
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Created deployment.\n")
+	} else {
+		err = r.Update(ctx, deploymentSpec, &client.UpdateOptions{})
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Deployment Reconciled.\n")
+
+	}
 
 	// TODO(user): your logic here
 

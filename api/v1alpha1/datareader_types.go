@@ -28,8 +28,7 @@ type DatareaderSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Datareader. Edit datareader_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Labels string `json:"labels"`
 }
 
 // DatareaderStatus defines the observed state of Datareader
