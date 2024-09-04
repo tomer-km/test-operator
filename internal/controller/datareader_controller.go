@@ -22,8 +22,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -41,29 +41,30 @@ type DatareaderReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-func GetDeploymentSpec(name string, volumespecs []apiv1.Volume, volumemounts []apiv1.VolumeMount) *appsv1.Deployment {
+func GetDeploymentSpec(NamespacedName types.NamespacedName, volumespecs []apiv1.Volume, volumemounts []apiv1.VolumeMount, image string) *appsv1.Deployment {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:      NamespacedName.Name,
+			Namespace: NamespacedName.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: int32Ptr(2),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": name,
+					"reader": NamespacedName.Name,
 				},
 			},
 			Template: apiv1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": name,
+						"reader": NamespacedName.Name,
 					},
 				},
 				Spec: apiv1.PodSpec{
 					Containers: []apiv1.Container{
 						{
-							Name:  "web",
-							Image: "nginx:1.12",
+							Name:  "reader",
+							Image: image,
 							Ports: []apiv1.ContainerPort{
 								{
 									Name:          "http",
@@ -107,10 +108,10 @@ func (r *DatareaderReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	configmaps := &corev1.ConfigMapList{}
+	configmaps := &apiv1.ConfigMapList{}
 	deployment := &appsv1.Deployment{}
 
-	selector := labels.SelectorFromSet(map[string]string{"test": "true"})
+	selector := labels.SelectorFromSet(map[string]string{"reader": "true"})
 
 	err = r.List(ctx, configmaps, &client.ListOptions{LabelSelector: selector, Namespace: req.NamespacedName.Namespace})
 	if err != nil {
@@ -125,7 +126,17 @@ func (r *DatareaderReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		volumemounts = append(volumemounts, apiv1.VolumeMount{Name: configmap.Name, MountPath: "/tmp/cm/" + configmap.Name})
 	}
 
-	deploymentSpec := GetDeploymentSpec("demo-deployment", volumespecs, volumemounts)
+	image := func(image string) string {
+
+		if len(image) == 0 {
+			return "nginx:1.12"
+
+		}
+
+		return image
+	}(reader.Spec.Image)
+
+	deploymentSpec := GetDeploymentSpec(req.NamespacedName, volumespecs, volumemounts, image)
 
 	err = r.Get(ctx, req.NamespacedName, deployment, &client.GetOptions{})
 	if err != nil {

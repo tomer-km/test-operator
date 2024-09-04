@@ -28,7 +28,7 @@ type DatareaderSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Labels string `json:"labels"`
+	Image string `json:"image"`
 }
 
 // DatareaderStatus defines the observed state of Datareader

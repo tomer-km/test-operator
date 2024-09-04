@@ -62,7 +62,7 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: controller:latest
+        image: tomerkm/operator:v1.0
         name: manager
         securityContext:
           allowPrivilegeEscalation: false

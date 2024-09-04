@@ -39,10 +39,10 @@ spec:
           spec:
             description: DatareaderSpec defines the desired state of Datareader
             properties:
-              labels:
+              image:
                 type: string
             required:
-            - labels
+            - image
             type: object
           status:
             description: DatareaderStatus defines the observed state of Datareader
